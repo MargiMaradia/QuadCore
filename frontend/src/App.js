@@ -94,6 +94,8 @@ const App = () => {
         />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        {/* Support both forms: with and without token param */}
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
         {/* Protected Routes Wrapped in Layout */}
