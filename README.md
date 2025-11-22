@@ -390,5 +390,5 @@ For support, email support@stocksync.com or open an issue in the repository.
 
 ---
 
-**Made with ❤️ for efficient inventory management**
+**Made for efficient inventory management**
 
