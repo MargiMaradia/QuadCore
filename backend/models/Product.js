@@ -4,7 +4,7 @@ const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   sku: { type: String, required: true, unique: true },
   description: { type: String },
-  category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' }, // Assuming Category model exists or just string if simplified
+  category: { type: String }, // Category name as string
   unitOfMeasure: { type: String, required: true },
   costPrice: { type: Number, required: true },
   sellingPrice: { type: Number, required: true },

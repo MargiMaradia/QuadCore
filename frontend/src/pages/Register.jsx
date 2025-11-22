@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { authAPI } from '../services/api';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -9,17 +10,51 @@ const Register = () => {
     password: '',
     confirmPassword: ''
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
+      setError("Passwords do not match!");
       return;
     }
-    // Mock registration logic
-    alert(`Registration successful as ${formData.role.replace('_', ' ')}! Please sign in.`);
-    navigate('/login');
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long!");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.register({
+        fullName: formData.fullName,
+        email: formData.email,
+        role: formData.role,
+        password: formData.password,
+        phone: formData.phone || ''
+      });
+
+      // Verify response has required fields
+      if (!response.token || !response._id) {
+        throw new Error('Invalid response from server');
+      }
+
+      // Save token and user data
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response));
+
+      console.log('User registered successfully:', response.email);
+      alert(`Registration successful as ${formData.role.replace('_', ' ')}! Redirecting to dashboard...`);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,6 +72,12 @@ const Register = () => {
           <h2 className="text-2xl font-bold text-silk-charcoal">Create Account</h2>
           <p className="text-silk-mauve">Join StockSync today</p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -89,9 +130,10 @@ const Register = () => {
           
           <button 
             type="submit" 
-            className="w-full bg-silk-charcoal text-silk-gold py-3 font-bold hover:bg-gray-800 transition-colors shadow-sm"
+            disabled={loading}
+            className="w-full bg-silk-charcoal text-silk-gold py-3 font-bold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Register
+            {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
 

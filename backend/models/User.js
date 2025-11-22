@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema({
     required: true 
   },
   phone: { type: String },
-  isActive: { type: Boolean, default: true }
+  isActive: { type: Boolean, default: true },
+  resetPasswordOTP: { type: String },
+  resetPasswordOTPExpire: { type: Date }
 }, { timestamps: true });
 
 // Hash password before saving
@@ -20,5 +22,10 @@ userSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
+
+// Match user entered password to hashed password in database
+userSchema.methods.matchPassword = async function(enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
 
 module.exports = mongoose.model('User', userSchema);

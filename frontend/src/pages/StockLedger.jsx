@@ -1,32 +1,90 @@
-import React, { useState } from 'react';
-import { mockProducts, mockWarehouses } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { stockAPI, warehousesAPI, exportAPI } from '../services/api';
+import { exportStockToCSV } from '../utils/csvExport';
 import { Search, Filter, Download } from 'lucide-react';
 
-const StockLedger = () => {
+const StockLedger = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
-    status: 'all',
     warehouse: 'all',
-    category: 'all'
   });
+  const [stocks, setStocks] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  const categories = [...new Set(mockProducts.map(p => p.category))];
+  useEffect(() => {
+    loadData();
+  }, [filters.warehouse]);
 
-  const filteredStock = mockProducts.filter(p => {
-    const matchesSearch = 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase());
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [stocksData, warehousesData] = await Promise.all([
+        stockAPI.getAll(filters.warehouse !== 'all' ? { warehouse: filters.warehouse } : {}),
+        warehousesAPI.getAll()
+      ]);
+      
+      setStocks(stocksData.stocks || stocksData);
+      setWarehouses(warehousesData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      alert('Failed to load stock data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredStock = stocks.filter(item => {
+    const product = item.product;
+    if (!product) return false;
     
-    const matchesStatus = filters.status === 'all' || p.status === filters.status;
-    const matchesWarehouse = filters.warehouse === 'all' || p.warehouse === filters.warehouse;
-    const matchesCategory = filters.category === 'all' || p.category === filters.category;
+    const matchesSearch = 
+      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.sku?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesWarehouse = filters.warehouse === 'all' || item.warehouse?._id === filters.warehouse;
 
-    return matchesSearch && matchesStatus && matchesWarehouse && matchesCategory;
+    return matchesSearch && matchesWarehouse;
   });
 
-  const getWarehouseName = (id) => {
-    const wh = mockWarehouses.find(w => w._id === id);
-    return wh ? wh.name : id;
+  const handleExportCSV = async () => {
+    try {
+      setExporting(true);
+      const params = filters.warehouse !== 'all' ? { warehouse: filters.warehouse } : {};
+      
+      // Try server-side export first
+      const token = localStorage.getItem('token');
+      const queryString = new URLSearchParams(params).toString();
+      const url = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/export/stock${queryString ? `?${queryString}` : ''}`;
+      
+      // Fetch with authentication
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', `stock-export-${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+      } else {
+        throw new Error('Server export failed');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      // Fallback to client-side export
+      exportStockToCSV(filteredStock, warehouses);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -36,9 +94,13 @@ const StockLedger = () => {
           <h1 className="text-2xl font-bold text-silk-charcoal">Stock Ledger</h1>
           <p className="text-silk-mauve">Real-time view of remaining stock across all locations.</p>
         </div>
-        <button className="bg-white border border-silk-clay text-silk-charcoal px-4 py-2 font-medium shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-colors">
+        <button 
+          onClick={handleExportCSV}
+          disabled={exporting || loading}
+          className="bg-white border border-silk-clay text-silk-charcoal px-4 py-2 font-medium shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Download size={18} />
-          Export CSV
+          {exporting ? 'Exporting...' : 'Export CSV'}
         </button>
       </div>
 
@@ -58,32 +120,12 @@ const StockLedger = () => {
           <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
             <select 
               className="p-2 border border-silk-clay focus:outline-none focus:border-silk-gold bg-white min-w-[140px]"
-              value={filters.status}
-              onChange={(e) => setFilters({...filters, status: e.target.value})}
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="low_stock">Low Stock</option>
-              <option value="out_of_stock">Out of Stock</option>
-            </select>
-            <select 
-              className="p-2 border border-silk-clay focus:outline-none focus:border-silk-gold bg-white min-w-[140px]"
               value={filters.warehouse}
               onChange={(e) => setFilters({...filters, warehouse: e.target.value})}
             >
               <option value="all">All Warehouses</option>
-              {mockWarehouses.map(w => (
+              {warehouses.map(w => (
                 <option key={w._id} value={w._id}>{w.name}</option>
-              ))}
-            </select>
-            <select 
-              className="p-2 border border-silk-clay focus:outline-none focus:border-silk-gold bg-white min-w-[140px]"
-              value={filters.category}
-              onChange={(e) => setFilters({...filters, category: e.target.value})}
-            >
-              <option value="all">All Categories</option>
-              {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -106,53 +148,69 @@ const StockLedger = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-silk-clay">
-              {filteredStock.map((product) => {
-                const reserved = Math.floor(product.quantity * 0.1); // Mock reserved logic
-                const available = product.quantity - reserved;
-                const totalValue = product.quantity * product.unitPrice;
-
-                return (
-                  <tr key={product._id} className="hover:bg-silk-sand/10 transition-colors">
-                    <td className="p-4">
-                      <div className="font-bold text-silk-charcoal">{product.name}</div>
-                      <div className="text-xs text-silk-mauve font-mono">{product.sku}</div>
-                      <div className="text-xs text-silk-mauve mt-1">{product.category}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm font-medium text-silk-charcoal">{getWarehouseName(product.warehouse)}</div>
-                      <div className="text-xs text-silk-mauve">{product.location}</div>
-                    </td>
-                    <td className="p-4 text-right font-bold text-silk-charcoal">{product.quantity}</td>
-                    <td className="p-4 text-right text-amber-600">{reserved}</td>
-                    <td className="p-4 text-right font-bold text-green-600">{available}</td>
-                    <td className="p-4 text-right text-sm text-silk-mauve">${product.unitPrice.toFixed(2)}</td>
-                    <td className="p-4 text-right font-medium text-silk-charcoal">${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                  </tr>
-                );
-              })}
-              {filteredStock.length === 0 && (
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="p-8 text-center text-silk-mauve">
+                    Loading stock data...
+                  </td>
+                </tr>
+              ) : filteredStock.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="p-8 text-center text-silk-mauve">
                     No stock found matching your search.
                   </td>
                 </tr>
+              ) : (
+                filteredStock.map((item) => {
+                  const product = item.product || {};
+                  const warehouse = item.warehouse || {};
+                  const location = item.location || {};
+                  const quantity = item.quantity || 0;
+                  const reserved = item.reservedQuantity || 0;
+                  const available = item.availableQuantity || 0;
+                  const costPrice = product.costPrice || 0;
+                  const totalValue = quantity * costPrice;
+
+                  return (
+                    <tr key={item._id} className="hover:bg-silk-sand/10 transition-colors">
+                      <td className="p-4">
+                        <div className="font-bold text-silk-charcoal">{product.name || 'N/A'}</div>
+                        <div className="text-xs text-silk-mauve font-mono">{product.sku || ''}</div>
+                        <div className="text-xs text-silk-mauve mt-1">{product.category || ''}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm font-medium text-silk-charcoal">{warehouse.name || warehouse.code || 'N/A'}</div>
+                        <div className="text-xs text-silk-mauve">{location.name || location.code || ''}</div>
+                      </td>
+                      <td className="p-4 text-right font-bold text-silk-charcoal">{quantity}</td>
+                      <td className="p-4 text-right text-amber-600">{reserved}</td>
+                      <td className="p-4 text-right font-bold text-green-600">{available}</td>
+                      <td className="p-4 text-right text-sm text-silk-mauve">${costPrice.toFixed(2)}</td>
+                      <td className="p-4 text-right font-medium text-silk-charcoal">${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             <tfoot className="bg-gray-50 border-t border-silk-clay">
               <tr>
                 <td colSpan="2" className="p-4 font-bold text-silk-charcoal text-right">Totals:</td>
                 <td className="p-4 text-right font-bold text-silk-charcoal">
-                  {filteredStock.reduce((acc, p) => acc + p.quantity, 0)}
+                  {filteredStock.reduce((acc, item) => acc + (item.quantity || 0), 0)}
                 </td>
                 <td className="p-4 text-right font-bold text-amber-600">
-                  {filteredStock.reduce((acc, p) => acc + Math.floor(p.quantity * 0.1), 0)}
+                  {filteredStock.reduce((acc, item) => acc + (item.reservedQuantity || 0), 0)}
                 </td>
                 <td className="p-4 text-right font-bold text-green-600">
-                  {filteredStock.reduce((acc, p) => acc + (p.quantity - Math.floor(p.quantity * 0.1)), 0)}
+                  {filteredStock.reduce((acc, item) => acc + (item.availableQuantity || 0), 0)}
                 </td>
                 <td className="p-4"></td>
                 <td className="p-4 text-right font-bold text-silk-charcoal">
-                  ${filteredStock.reduce((acc, p) => acc + (p.quantity * p.unitPrice), 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  ${filteredStock.reduce((acc, item) => {
+                    const qty = item.quantity || 0;
+                    const price = item.product?.costPrice || 0;
+                    return acc + (qty * price);
+                  }, 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </td>
               </tr>
             </tfoot>

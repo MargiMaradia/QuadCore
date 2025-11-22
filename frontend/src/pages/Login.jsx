@@ -1,20 +1,48 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { mockUsers } from '../data/mockData';
+import { authAPI } from '../services/api';
 
 const Login = ({ onLogin }) => {
-  const [email, setEmail] = useState('alice@stockmaster.com'); // Default to manager
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Simple mock login
-    const user = mockUsers.find(u => u.email === email);
-    if (user) {
-      onLogin(user);
+    setError('');
+
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.login(email, password);
+      
+      // Verify response has required fields
+      if (!response.token || !response._id) {
+        throw new Error('Invalid response from server');
+      }
+
+      // Save token and user data
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response));
+
+      console.log('User logged in successfully:', response.email);
+
+      // Call onLogin callback if provided
+      if (onLogin) {
+        onLogin(response);
+      }
+
       navigate('/dashboard');
-    } else {
-      alert('User not found');
+    } catch (err) {
+      setError(err.message || 'Invalid email or password');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -34,31 +62,46 @@ const Login = ({ onLogin }) => {
           <p className="text-silk-mauve">Sign in to your account</p>
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-silk-charcoal mb-1">Email Address</label>
-            <select 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)}
+            <input 
+              type="email" 
+              required
               className="w-full p-2 border border-silk-clay focus:outline-none focus:border-silk-gold bg-white"
-            >
-              {mockUsers.map(u => (
-                <option key={u._id} value={u.email}>
-                  {u.fullName} ({u.role})
-                </option>
-              ))}
-            </select>
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-silk-charcoal mb-1">Password</label>
+            <input 
+              type="password" 
+              required
+              className="w-full p-2 border border-silk-clay focus:outline-none focus:border-silk-gold bg-white"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+            />
           </div>
           
           <div className="flex justify-end">
-            <Link to="/forgot-password" class="text-sm text-silk-mauve hover:text-silk-charcoal">Forgot Password?</Link>
+            <Link to="/forgot-password" className="text-sm text-silk-mauve hover:text-silk-charcoal">Forgot Password?</Link>
           </div>
 
           <button 
             type="submit" 
-            className="w-full bg-silk-charcoal text-silk-gold py-3 font-bold hover:bg-gray-800 transition-colors shadow-sm"
+            disabled={loading}
+            className="w-full bg-silk-charcoal text-silk-gold py-3 font-bold hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sign In
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 
