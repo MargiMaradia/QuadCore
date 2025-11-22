@@ -75,4 +75,5 @@ Before you begin, ensure you have the following installed:
 - CORS configuration
 - Environment variable protection
 
-
+Video Link:
+https://drive.google.com/file/d/19cP7zxTZNxGhhR8otJhDFYa6x5j-mL8p/view?usp=sharing
