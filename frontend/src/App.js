@@ -4,6 +4,10 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 // Layout & Protected Route
 import Layout from "./layouts/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
+
+// API Services
+import { authAPI } from "./services/api";
 
 // Pages
 import Login from "./pages/Login";
@@ -37,7 +41,6 @@ const App = () => {
           
           // Verify user with backend
           try {
-            const { authAPI } = require('./services/api');
             const currentUser = await authAPI.getMe();
             // Update user data from database
             setUser(currentUser);
@@ -81,8 +84,9 @@ const App = () => {
   };
 
   return (
-    <Router>
-      <Routes>
+    <ErrorBoundary>
+      <Router>
+        <Routes>
         {/* Public Routes */}
         <Route 
           path="/login" 
@@ -115,6 +119,7 @@ const App = () => {
         </Route>
       </Routes>
     </Router>
+    </ErrorBoundary>
   );
 };
 

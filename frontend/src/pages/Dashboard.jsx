@@ -22,6 +22,10 @@ import {
 } from 'recharts';
 
 const Dashboard = ({ user }) => {
+  if (!user) {
+    return <div className="p-6 text-center text-silk-mauve">Loading...</div>;
+  }
+  
   const isManager = user.role === 'inventory_manager' || user.role === 'admin';
   const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', type: '', data: [] });
 
